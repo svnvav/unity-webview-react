@@ -44,6 +44,9 @@ public class GreeWebViewWrapper : MonoBehaviour, IWebView
     WebView.SetVisibility(false);
   }
 
+  /// <summary>
+  /// callback-метод, который обрабатывает сообщения, полученные от Веб-компонентов
+  /// </summary>
   private void onCall(string msg) {
     if (NavigationPanel.activeInHierarchy) {
       BackButton.interactable = WebView.CanGoBack();
@@ -59,6 +62,10 @@ public class GreeWebViewWrapper : MonoBehaviour, IWebView
     }
   }
 
+  /// <summary>
+  /// callback-метод, который выполняется по завершении загрузки компонента
+  /// </summary>
+  /// <param name="msg">url загруженного ресурса</param>
   private void onLoad(string msg) {
     if (msg.StartsWith("http")) {
       NavigationPanel.SetActive(true);
@@ -72,6 +79,8 @@ public class GreeWebViewWrapper : MonoBehaviour, IWebView
     }
 
 #if !UNITY_ANDROID || UNITY_EDITOR
+    //Не в Android необходимо инициализировать объект Unity с методом call,
+    //чтобе обеспечить компоненту возможность взаимодествия с приложением
     WebView.EvaluateJS(@"
 				 window.Unity = {
 					call: function(msg) { 
@@ -111,12 +120,8 @@ public class GreeWebViewWrapper : MonoBehaviour, IWebView
     WebView.SetVisibility(false);
   }
 
-  public void HideOnButtonClick() {
-    Hide();
-  }
-
   public void Destroy() {
-    HideOnButtonClick();
+    Hide();
     DestroyImmediate(WebView);
   }
 }

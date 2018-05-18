@@ -7,17 +7,28 @@ using UnityEngine;
 public class WebViewController : MonoBehaviour {
 
 	public IWebView WebView;
-  
   public GreeWebViewWrapper GreeWebView;
+
+  private string
+    persistentComponentsPath, //for Android
+    streamingComponentsPath, //for others
+    componentsPath;
 
 
   private void Awake() {
     WebView = GreeWebView;
     GreeWebView.gameObject.SetActive(true);
-    StartCoroutine(LoadFilesFromDirectory(Application.streamingAssetsPath + "/WebComponents/"));
+    streamingComponentsPath = Application.streamingAssetsPath + "/WebComponents/";
+    persistentComponentsPath = Application.persistentDataPath + "/WebComponents/";
+    #if UNITY_ANDROID && !UNITY_EDITOR
+    componentsPath = persistentComponentsPath;
+    StartCoroutine(LoadFilesFromDirectory(streamingComponentsPath));
+    #else
+    componentsPath = streamingComponentsPath;
+    #endif
   }
   
-  //for availability of using buttons
+  //чтобы можно было использовать, как обработчик нажатия кнопки
   public void LoadPage(string url) {
     LoadPage(url, "");
   }
@@ -25,11 +36,11 @@ public class WebViewController : MonoBehaviour {
   public void LoadPage(string url, string jsEvalString) {
     WebView.Init();
 
-    if (url.StartsWith("https")) {    
+    if (url.StartsWith("https")) {
       WebView.LoadWebPage(url.Replace(" ", "%20"), jsEvalString);
     }
     else if (url.StartsWith("http")) {
-      #if UNTIY_IOS
+      #if UNTIY_IOS //iOS не пропускает запросы по незащищенному протоколу
       Application.OpenURL(url);
       WebView.Hide();
       #else
@@ -37,7 +48,7 @@ public class WebViewController : MonoBehaviour {
       #endif
     }
     else {
-      var dst = Path.Combine(Application.persistentDataPath + "/WebComponents", url);
+      var dst = Path.Combine(componentsPath, url);
       WebView.LoadLocalComponent("file://" + dst.Replace(" ", "%20"), jsEvalString);
     }
   }
@@ -45,28 +56,19 @@ public class WebViewController : MonoBehaviour {
 
   #region Loading region
 
-  List<string> pathsStack = new List<string>();
-
-  private string GetPathFromStack() {
-    string result = string.Empty;
-    for (int i = 0; i < pathsStack.Count; i++) {
-      result += "/" + pathsStack[i];
-    }
-
-    return result;
-  }
-
+  /// <summary>
+  /// Копирует файлы из path в persistentComponentsPath
+  /// </summary>
   IEnumerator LoadFilesFromDirectory(string path) {
     
-    if (!Directory.Exists(Application.persistentDataPath + "/WebComponents/")) {
+    if (!Directory.Exists(persistentComponentsPath)) {
       Directory.CreateDirectory(
-        Application.persistentDataPath + "/WebComponents/"
+        persistentComponentsPath
       );
     }
     
     byte[] result;
     
-#if UNITY_ANDROID && !UNITY_EDITOR
     string[] filesTable = new string[] {
       "about-component.html",
       "about-component.js",
@@ -74,54 +76,18 @@ public class WebViewController : MonoBehaviour {
     };
     WWW _www;
     foreach (string item in filesTable) {
-      _www = new WWW(Application.streamingAssetsPath + "/WebComponents/" + item);
+      _www = new WWW(streamingComponentsPath + item);
       yield return _www;
       result = _www.bytes;
-      var dst = Path.Combine(Application.persistentDataPath + "/WebComponents", item);
+      var dst = Path.Combine(persistentComponentsPath, item);
       File.WriteAllBytes(dst, result);
     }
-#else
-    string[] Directories = Directory.GetDirectories(path);
-    int slashIndex;
-    if (Directories.Length > 0) {
-      foreach (string tempPath in Directories) {
-        slashIndex = tempPath.LastIndexOf("/");
-        string folderName = tempPath.Substring(
-          slashIndex + 1,
-          tempPath.Length - slashIndex - 1
-        );
-        pathsStack.Add(folderName);
-
-        if(!Directory.Exists(Application.persistentDataPath + "/WebComponents/" + GetPathFromStack())){
-          Directory.CreateDirectory(
-            Application.persistentDataPath + "/WebComponents/" + GetPathFromStack()
-          );     
-        }
-
-        yield return LoadFilesFromDirectory(tempPath);
-        pathsStack.Remove(pathsStack.Last());
-      }
-    }
-
-    string[] files = Directory.GetFiles(path);
-
-    foreach (string src in files) {
-
-      slashIndex = src.LastIndexOf("/");
-      var dst = src.Substring(slashIndex + 1, src.Length - slashIndex - 1);
-      dst = Path.Combine(Application.persistentDataPath + "/WebComponents/" +
-                         GetPathFromStack(), dst);
-
-      result = File.ReadAllBytes(src);
-
-      File.WriteAllBytes(dst, result);
-    }
-
-#endif
   }
 
   void OnDestroy() {
-    RecursiveRemoveFolders(Application.persistentDataPath + "/WebComponents");
+    #if UNITY_ANDROID
+    RecursiveRemoveFolders(persistentComponentsPath);
+    #endif
   }
 
   private void RecursiveRemoveFolders(string path) {
